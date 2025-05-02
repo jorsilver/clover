@@ -14,6 +14,7 @@ const COLOR_LED = 143;
 const COLOR_GPIO = 200;
 const DOCS_URL = 'https://clover.coex.tech/en/blocks.html';
 
+
 var frameIds = [["body", "BODY"], ["markers map", "ARUCO_MAP"], ["marker", "ARUCO"], ["last navigate target", "NAVIGATE_TARGET"], ["map", "MAP"]];
 var frameIdsWithTerrain = frameIds.concat([["terrain", "TERRAIN"]]);
 
@@ -72,6 +73,25 @@ function updateSetpointBlock(e) {
 	this.render();
 }
 
+
+/* FLIGHT BLOCKS */
+
+Blockly.Blocks['take_off'] = {
+	init: function () {
+		this.appendValueInput("ALT")
+			.setCheck("Number")
+			.appendField("take off to");
+		this.appendDummyInput()
+			.appendField("wait")
+			.appendField(new Blockly.FieldCheckbox("TRUE"), "WAIT");
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour(COLOR_FLIGHT);
+		this.setTooltip("Take off on desired altitude in meters.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
 Blockly.Blocks['navigate'] = {
 	init: function () {
 		let navFrameId = frameIdsWithTerrain.slice();
@@ -119,33 +139,67 @@ Blockly.Blocks['navigate'] = {
 	}
 };
 
-Blockly.Blocks['set_velocity'] = {
+Blockly.Blocks['land'] = {
 	init: function () {
 		this.appendDummyInput()
-			.appendField("set velocity");
-		this.appendValueInput("X")
-			.setCheck("Number")
-			.appendField("forward");
-		this.appendValueInput("Y")
-			.setCheck("Number")
-			.appendField("left");
-		this.appendValueInput("Z")
-			.setCheck("Number")
-			.appendField("up");
+			.appendField("land");
 		this.appendDummyInput()
-			.appendField("relative to")
-			.appendField(new Blockly.FieldDropdown(frameIds), "FRAME_ID");
-		this.appendValueInput("ID")
-			.setCheck("Number")
-			.appendField("with ID")
-			.setVisible(false)
-		this.setInputsInline(false);
+			.appendField("wait")
+			.appendField(new Blockly.FieldCheckbox("TRUE"), "WAIT");
+		this.setInputsInline(true);
 		this.setPreviousStatement(true, null);
 		this.setNextStatement(true, null);
 		this.setColour(COLOR_FLIGHT);
-		this.setTooltip("Set the drone velocity in meters per second (cancels navigation requests).");
+		this.setTooltip("Land the drone.");
 		this.setHelpUrl(DOCS_URL + '#' + this.type);
-		this.setOnChange(considerFrameId);
+	}
+};
+
+Blockly.Blocks['set_yaw'] = {
+	init: function () {
+		this.appendValueInput("YAW")
+			.setCheck("Number")
+			.appendField("rotate by");
+		this.appendDummyInput()
+			.appendField("relative to")
+			.appendField(new Blockly.FieldDropdown([["body", "body"], ["markers map", "aruco_map"], ["last navigate target", "navigate_target"]]), "FRAME_ID");
+		this.appendDummyInput()
+			.appendField("wait")
+			.appendField(new Blockly.FieldCheckbox("TRUE"), "WAIT");
+		this.setInputsInline(true);
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour(COLOR_FLIGHT);
+		this.setTooltip("Rotate the drone to the specified angle in degree (not radian).");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['wait'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("wait");
+		this.appendValueInput("TIME")
+			.setCheck("Number");
+		this.appendDummyInput()
+			.appendField("seconds");
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour(COLOR_FLIGHT);
+		this.setTooltip("");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['wait_arrival'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("wait arrival");
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour(COLOR_FLIGHT);
+		this.setTooltip("Wait until the drone arrives to the navigation target.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
 	}
 };
 
@@ -197,16 +251,21 @@ Blockly.Blocks['setpoint'] = {
 	}
 };
 
-Blockly.Blocks['rangefinder_distance'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("current rangefinder distance");
-		this.setOutput(true, "Number");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
+Blockly.Blocks['hover'] = {
+    init: function () {
+        this.appendValueInput("ALTITUDE")
+            .setCheck("Number")
+            .appendField("Hover at")
+        this.setPreviousStatement(true, null);
+        this.setNextStatement(true, null);
+        this.setColour(230);
+        this.setTooltip("Makes the drone hover at a specified altitude.");
+        this.setHelpUrl(DOCS_URL + '#' + this.type);
+    }
 };
+
+
+/* STATE BLOCKS */
 
 Blockly.Blocks['get_position'] = {
 	init: function () {
@@ -256,6 +315,102 @@ Blockly.Blocks['get_attitude'] = {
 	}
 };
 
+Blockly.Blocks['global_position'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("current")
+			.appendField(new Blockly.FieldDropdown([["latitude", "LAT"], ["longitude", "LON"], ["altitude", "ALT"]]), "FIELD");
+		this.setOutput(true, "Number");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("Returns current global position (latitude, longitude, altitude above the WGS 84 ellipsoid).");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['distance'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("distance to point");
+		this.appendValueInput("X")
+			.setCheck("Number")
+			.appendField("x");
+		this.appendValueInput("Y")
+			.setCheck("Number")
+			.appendField("y");
+		this.appendValueInput("Z")
+			.setCheck("Number")
+			.appendField("z");
+		this.appendDummyInput()
+			.appendField("relative to")
+			.appendField(new Blockly.FieldDropdown([["markers map", "ARUCO_MAP"], ["marker", "ARUCO"], ["last navigate target", "NAVIGATE_TARGET"], ["terrain", "TERRAIN"]]), "FRAME_ID");
+		this.appendValueInput("ID")
+			.setCheck("Number")
+			.appendField("with ID")
+			.setVisible(false);
+		this.setInputsInline(false);
+		this.setOutput(true, "Number");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("Returns the distance to the given point in meters.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+		this.setOnChange(considerFrameId);
+	}
+};
+
+Blockly.Blocks['get_time'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("time");
+		this.setOutput(true, "Number");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("Returns current timestamp in seconds.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['arrived'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("arrived?");
+		this.setOutput(true, "Boolean");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("Returns if the drone arrived to the navigation target.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['rangefinder_distance'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("current rangefinder distance");
+		this.setOutput(true, "Number");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['mode'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("current flight mode");
+		this.setOutput(true, "String");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("Returns current flight mode (POSCTL, OFFBOARD, etc).");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['armed'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("armed?");
+		this.setOutput(true, "Boolean");
+		this.setColour(COLOR_STATE);
+		this.setTooltip("Returns if the drone armed.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
 Blockly.Blocks['voltage'] = {
 	init: function () {
 		this.appendDummyInput()
@@ -283,63 +438,8 @@ Blockly.Blocks['get_rc'] = {
 	}
 }
 
-Blockly.Blocks['armed'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("armed?");
-		this.setOutput(true, "Boolean");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("Returns if the drone armed.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
 
-
-Blockly.Blocks['mode'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("current flight mode");
-		this.setOutput(true, "String");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("Returns current flight mode (POSCTL, OFFBOARD, etc).");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-
-Blockly.Blocks['wait_arrival'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("wait arrival");
-		this.setPreviousStatement(true, null);
-		this.setNextStatement(true, null);
-		this.setColour(COLOR_FLIGHT);
-		this.setTooltip("Wait until the drone arrives to the navigation target.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['get_time'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("time");
-		this.setOutput(true, "Number");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("Returns current timestamp in seconds.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['arrived'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("arrived?");
-		this.setOutput(true, "Boolean");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("Returns if the drone arrived to the navigation target.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
+/* LED BLOCKS */
 
 Blockly.Blocks['set_led'] = {
 	init: function () {
@@ -397,179 +497,8 @@ Blockly.Blocks['led_count'] = {
 	}
 };
 
-Blockly.Blocks['take_off'] = {
-	init: function () {
-		this.appendValueInput("ALT")
-			.setCheck("Number")
-			.appendField("take off to");
-		this.appendDummyInput()
-			.appendField("wait")
-			.appendField(new Blockly.FieldCheckbox("TRUE"), "WAIT");
-		this.setPreviousStatement(true, null);
-		this.setNextStatement(true, null);
-		this.setColour(COLOR_FLIGHT);
-		this.setTooltip("Take off on desired altitude in meters.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
 
-Blockly.Blocks['land'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("land");
-		this.appendDummyInput()
-			.appendField("wait")
-			.appendField(new Blockly.FieldCheckbox("TRUE"), "WAIT");
-		this.setInputsInline(true);
-		this.setPreviousStatement(true, null);
-		this.setNextStatement(true, null);
-		this.setColour(COLOR_FLIGHT);
-		this.setTooltip("Land the drone.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['global_position'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("current")
-			.appendField(new Blockly.FieldDropdown([["latitude", "LAT"], ["longitude", "LON"], ["altitude", "ALT"]]), "FIELD");
-		this.setOutput(true, "Number");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("Returns current global position (latitude, longitude, altitude above the WGS 84 ellipsoid).");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['on_take_off'] = {
-	init: function () {
-		this.appendStatementInput("TAKE_OFF")
-			.setCheck(null)
-			.appendField("When took off");
-		this.setColour(230);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['on_landing'] = {
-	init: function () {
-		this.appendStatementInput("LAND")
-			.setCheck(null)
-			.appendField("When landed");
-		this.setColour(230);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['on_armed'] = {
-	init: function () {
-		this.appendStatementInput("ARMED")
-			.setCheck(null)
-			.appendField("when armed");
-		this.setColour(230);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.FieldAngle.WRAP = 180;
-Blockly.FieldAngle.ROUND = 10;
-
-Blockly.Blocks['angle'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField(new Blockly.FieldAngle(90), "ANGLE");
-		this.setOutput(true, "Number");
-		this.setColour(230);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['set_yaw'] = {
-	init: function () {
-		this.appendValueInput("YAW")
-			.setCheck("Number")
-			.appendField("rotate by");
-		this.appendDummyInput()
-			.appendField("relative to")
-			.appendField(new Blockly.FieldDropdown([["body", "body"], ["markers map", "aruco_map"], ["last navigate target", "navigate_target"]]), "FRAME_ID");
-		this.appendDummyInput()
-			.appendField("wait")
-			.appendField(new Blockly.FieldCheckbox("TRUE"), "WAIT");
-		this.setInputsInline(true);
-		this.setPreviousStatement(true, null);
-		this.setNextStatement(true, null);
-		this.setColour(COLOR_FLIGHT);
-		this.setTooltip("Rotate the drone to the specified angle in degree (not radian).");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-Blockly.Blocks['distance'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("distance to point");
-		this.appendValueInput("X")
-			.setCheck("Number")
-			.appendField("x");
-		this.appendValueInput("Y")
-			.setCheck("Number")
-			.appendField("y");
-		this.appendValueInput("Z")
-			.setCheck("Number")
-			.appendField("z");
-		this.appendDummyInput()
-			.appendField("relative to")
-			.appendField(new Blockly.FieldDropdown([["markers map", "ARUCO_MAP"], ["marker", "ARUCO"], ["last navigate target", "NAVIGATE_TARGET"], ["terrain", "TERRAIN"]]), "FRAME_ID");
-		this.appendValueInput("ID")
-			.setCheck("Number")
-			.appendField("with ID")
-			.setVisible(false);
-		this.setInputsInline(false);
-		this.setOutput(true, "Number");
-		this.setColour(COLOR_STATE);
-		this.setTooltip("Returns the distance to the given point in meters.");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-		this.setOnChange(considerFrameId);
-	}
-};
-
-Blockly.Blocks['wait'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("wait");
-		this.appendValueInput("TIME")
-			.setCheck("Number");
-		this.appendDummyInput()
-			.appendField("seconds");
-		this.setPreviousStatement(true, null);
-		this.setNextStatement(true, null);
-		this.setColour(COLOR_FLIGHT);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
-
-var keys = [['up', 'UP'], ['down', 'DOWN'], ['left', 'LEFT'], ['right', 'RIGHT'], ['space', 'SPACE']];
-
-Blockly.Blocks['key_pressed'] = {
-	init: function () {
-		this.appendDummyInput()
-			.appendField("key")
-			.appendField(new Blockly.FieldDropdown(keys, "NAME"))
-			.appendField("pressed");
-		this.appendStatementInput("PRESSED")
-			.setCheck(null);
-		this.setPreviousStatement(true, null);
-		this.setNextStatement(true, null);
-		this.setColour(230);
-		this.setTooltip("");
-		this.setHelpUrl(DOCS_URL + '#' + this.type);
-	}
-};
+/* GPIO BLOCKS */
 
 Blockly.Blocks['gpio_read'] = {
 	init: function () {
@@ -633,3 +562,134 @@ Blockly.Blocks['set_duty_cycle'] = {
 		this.setHelpUrl(DOCS_URL + '#GPIO');
 	}
 };
+
+
+/* CAMERA BLOCKS */
+
+Blockly.Blocks['take_photo'] = {
+    init: function () {
+        this.appendDummyInput()
+            .appendField("Take photo")
+        this.setPreviousStatement(true, null);
+        this.setNextStatement(true, null);
+        this.setColour(230);
+        this.setTooltip("Takes a photo with the drone's camera and saves it to the specified location.");
+    }
+};
+
+Blockly.Blocks['find_target'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("Find Target");
+		this.appendValueInput("X")
+			.setCheck("Number")
+			.appendField("Search Area Center (X)");
+		this.appendValueInput("Y")
+			.setCheck("Number")
+			.appendField("Search Area Center (Y)");
+		this.appendValueInput("SIZE")
+			.setCheck("Number")
+			.appendField("Grid Size");
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour(COLOR_FLIGHT);
+		this.setTooltip("Search Specified Area For Target");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+}
+
+
+/* Possibly Depricated... */
+
+// var keys = [['up', 'UP'], ['down', 'DOWN'], ['left', 'LEFT'], ['right', 'RIGHT'], ['space', 'SPACE']];
+// Blockly.Blocks['key_pressed'] = {
+// 	init: function () {
+// 		this.appendDummyInput()
+// 			.appendField("key")
+// 			.appendField(new Blockly.FieldDropdown(keys, "NAME"))
+// 			.appendField("pressed");
+// 		this.appendStatementInput("PRESSED")
+// 			.setCheck(null);
+// 		this.setPreviousStatement(true, null);
+// 		this.setNextStatement(true, null);
+// 		this.setColour(230);
+// 		this.setTooltip("");
+// 		this.setHelpUrl(DOCS_URL + '#' + this.type);
+// 	}
+// };
+
+// Blockly.Blocks['set_velocity'] = {
+// 	init: function () {
+// 		this.appendDummyInput()
+// 			.appendField("set velocity");
+// 		this.appendValueInput("X")
+// 			.setCheck("Number")
+// 			.appendField("forward");
+// 		this.appendValueInput("Y")
+// 			.setCheck("Number")
+// 			.appendField("left");
+// 		this.appendValueInput("Z")
+// 			.setCheck("Number")
+// 			.appendField("up");
+// 		this.appendDummyInput()
+// 			.appendField("relative to")
+// 			.appendField(new Blockly.FieldDropdown(frameIds), "FRAME_ID");
+// 		this.appendValueInput("ID")
+// 			.setCheck("Number")
+// 			.appendField("with ID")
+// 			.setVisible(false)
+// 		this.setInputsInline(false);
+// 		this.setPreviousStatement(true, null);
+// 		this.setNextStatement(true, null);
+// 		this.setColour(COLOR_FLIGHT);
+// 		this.setTooltip("Set the drone velocity in meters per second (cancels navigation requests).");
+// 		this.setHelpUrl(DOCS_URL + '#' + this.type);
+// 		this.setOnChange(considerFrameId);
+// 	}
+// };
+
+// Blockly.Blocks['on_take_off'] = {
+// 	init: function () {
+// 		this.appendStatementInput("TAKE_OFF")
+// 			.setCheck(null)
+// 			.appendField("When took off");
+// 		this.setColour(230);
+// 		this.setTooltip("");
+// 		this.setHelpUrl(DOCS_URL + '#' + this.type);
+// 	}
+// };
+
+// Blockly.Blocks['on_landing'] = {
+// 	init: function () {
+// 		this.appendStatementInput("LAND")
+// 			.setCheck(null)
+// 			.appendField("When landed");
+// 		this.setColour(230);
+// 		this.setTooltip("");
+// 		this.setHelpUrl(DOCS_URL + '#' + this.type);
+// 	}
+// };
+
+// Blockly.Blocks['on_armed'] = {
+// 	init: function () {
+// 		this.appendStatementInput("ARMED")
+// 			.setCheck(null)
+// 			.appendField("when armed");
+// 		this.setColour(230);
+// 		this.setTooltip("");
+// 		this.setHelpUrl(DOCS_URL + '#' + this.type);
+// 	}
+// };
+
+// Blockly.FieldAngle.WRAP = 180;
+// Blockly.FieldAngle.ROUND = 10;
+// Blockly.Blocks['angle'] = {
+// 	init: function () {
+// 		this.appendDummyInput()
+// 			.appendField(new Blockly.FieldAngle(90), "ANGLE");
+// 		this.setOutput(true, "Number");
+// 		this.setColour(230);
+// 		this.setTooltip("");
+// 		this.setHelpUrl(DOCS_URL + '#' + this.type);
+// 	}
+// };

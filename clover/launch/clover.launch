@@ -10,7 +10,7 @@
     <arg name="aruco" default="false"/>
     <arg name="rangefinder_vl53l1x" default="true"/>
     <arg name="led" default="true"/>
-    <arg name="blocks" default="false"/>
+    <arg name="blocks" default="true"/>
     <arg name="rc" default="false"/>
     <arg name="force_init" default="true"/> <!-- force estimator to init by publishing zero pose -->
 
@@ -71,9 +71,6 @@
         <param name="min_signal" value="0.4"/>
         <param name="pass_statuses" type="yaml" value="[0, 6, 7, 11]"/>
     </node>
-
-    <!-- rangefinder's frame -->
-    <node pkg="tf2_ros" type="static_transform_publisher" name="rangefinder_frame" args="0 0 -0.05 0 1.5707963268 0 base_link rangefinder" if="$(arg rangefinder_vl53l1x)"/>
 
     <!-- led strip -->
     <include file="$(find clover)/launch/led.launch" if="$(arg led)">
