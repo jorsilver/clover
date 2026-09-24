@@ -1,0 +1,111 @@
+import rospy
+import cv2
+import numpy as np
+from math import nan, sqrt
+from sensor_msgs.msg import Image, CameraInfo
+from geometry_msgs.msg import PointStamped, Point
+from cv_bridge import CvBridge
+from clover import long_callback, srv
+from std_srvs.srv import Trigger
+import tf2_ros
+import tf2_geometry_msgs
+
+rospy.init_node('cv', disable_signals=True)
+bridge = CvBridge()
+
+get_telemetry = rospy.ServiceProxy('get_telemetry', srv.GetTelemetry)
+set_position = rospy.ServiceProxy('set_position', srv.SetPosition)
+navigate = rospy.ServiceProxy('navigate', srv.Navigate)
+land = rospy.ServiceProxy('land', Trigger)
+
+tf_buffer = tf2_ros.Buffer()
+tf_listener = tf2_ros.TransformListener(tf_buffer)
+
+mask_pub = rospy.Publisher('~mask', Image, queue_size=1)
+point_pub = rospy.Publisher('~red_circle', PointStamped, queue_size=1)
+
+camera_info = rospy.wait_for_message('main_camera/camera_info', CameraInfo)
+camera_matrix = np.float64(camera_info.K).reshape(3, 3)
+distortion = np.float64(camera_info.D).flatten()
+
+CENTER = (2, 2)
+GRID_SIZE = 6
+
+x_range = np.around(np.linspace(CENTER[0] - GRID_SIZE / 2, CENTER[0] + GRID_SIZE / 2, int(GRID_SIZE/.33) + 1),2)
+y_range = np.around(np.linspace(CENTER[1] - GRID_SIZE / 2, CENTER[1] + GRID_SIZE / 2, int(GRID_SIZE/1) + 1),2)
+search_pattern = ((x, y) for i, y in enumerate(y_range)
+    for x in (x_range if i % 2 == 0 else reversed(x_range)))
+
+def wait_arrival(tolerance=0.1, time=1.0, telem=get_telemetry(frame_id='navigate_target')):
+    while not sqrt(telem.x ** 2 + telem.y ** 2 + telem.z ** 2) < tolerance:
+       telem = get_telemetry(frame_id='navigate_target')
+    rospy.sleep(time)
+
+def move_to_next_search_point():
+    try:
+        current_target = next(search_pattern)
+        rospy.loginfo(f"\nCurrently: ({round(get_telemetry().x, 2)}, {round(get_telemetry().y,2)})\nNext Point: {current_target}")
+        set_position(x=current_target[0], y=current_target[1], z=nan, yaw=nan, frame_id='map')
+        wait_arrival(tolerance=0.66, time=-1)
+    except StopIteration:
+        wait_arrival(tolerance=0.05)
+        rospy.loginfo(f"\nCIRCLE NOT FOUND\nLANDING: ({round(get_telemetry().x, 2)}, {round(get_telemetry().y,2)})")
+        land()
+        rospy.signal_shutdown("Circle not found.")
+
+def img_xy_to_point(xy, dist):
+    xy = cv2.undistortPoints(xy, camera_matrix, distortion, P=camera_matrix)[0][0]
+    xy -= camera_info.width // 2, camera_info.height // 2
+    fx = camera_matrix[0, 0]
+    fy = camera_matrix[1, 1]
+    return Point(x=xy[0] * dist / fx, y=xy[1] * dist / fy, z=dist)
+
+xy = None
+def get_center_of_mass(mask):
+    global xy
+    M = cv2.moments(mask)
+    if M['m00'] == 0:
+        return xy
+    xy = M['m10'] // M['m00'], M['m01'] // M['m00']
+    return xy
+
+@long_callback
+def image_callback(msg):
+    img_hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)
+    mask1 = cv2.inRange(img_hsv, (0, 150, 150), (15, 255, 255))
+    mask2 = cv2.inRange(img_hsv, (160, 150, 150), (180, 255, 255))
+    mask = cv2.bitwise_or(mask1, mask2)
+
+    if mask_pub.get_num_connections() > 0:
+        mask_pub.publish(bridge.cv2_to_imgmsg(mask, 'mono8'))
+
+    xy = get_center_of_mass(mask)
+    if xy is None: 
+        move_to_next_search_point()
+        return
+
+    altitude = get_telemetry('terrain').z
+    target = PointStamped(msg.header, img_xy_to_point(xy, altitude))
+    point_pub.publish(target)
+
+seconds = None
+def target_callback(msg):
+    global seconds
+    seconds = seconds or rospy.get_time()
+    setpoint = tf_buffer.transform(msg, 'map', timeout=rospy.Duration(0.2))
+
+    if rospy.get_time() - seconds < 10:
+        return set_position(x=setpoint.point.x, y=setpoint.point.y, z=float('nan'), yaw=float('nan'), frame_id=setpoint.header.frame_id)
+
+    land()
+    rospy.signal_shutdown('Centered on Red Circle - Landing')
+
+navigate(x=0, y=0, z=2, frame_id='body', auto_arm=True)
+wait_arrival()
+
+pattern_start = next(search_pattern)
+navigate(x=pattern_start[0], y=pattern_start[1], z=nan, speed=1)
+wait_arrival(time=2)
+image_sub = rospy.Subscriber('main_camera/image_raw_throttled', Image, image_callback, queue_size=1)
+target_sub = rospy.Subscriber('~red_circle', PointStamped, target_callback, queue_size=1)
+rospy.spin()
