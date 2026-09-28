@@ -10,11 +10,11 @@ Built as a capstone research project in programming-language design at Chapman U
 
 ## Demo
 
-![Autonomous search, detection, and tracking in Gazebo](docs/assets/drone_demo.gif)
+![Autonomous search, detection, and tracking in Gazebo](media/drone_demo.gif)
 
 The drone arms, takes off, flies a serpentine survey pattern, detects the red target, tracks it while it moves, then returns to its launch point and lands. Console output on the right shows the navigation state transitions in real time.
 
-*Full-resolution version: [`docs/assets/drone_demo.mp4`](docs/assets/drone_demo.mp4)*
+*Full-resolution version: [`media/drone_demo.mp4`](media/drone_demo.mp4)*
 
 ---
 
