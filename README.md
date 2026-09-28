@@ -1,47 +1,126 @@
-# clover🍀: create autonomous drones easily
+# Autonomous Search-and-Rescue Drone — a visual DSL for mission planning
 
-<img src="docs/assets/clover42-main-margin.png" align="right" width="400px" alt="COEX Clover Drone">
+A fork of the [Clover](https://github.com/CopterExpress/clover) drone framework, extended with a **Google Blockly visual programming language for autonomous search-and-rescue missions**. Blocks compile to executable Python that flies a PX4 drone in Gazebo SITL, running an OpenCV vision pipeline that searches a survey area, detects a target, and tracks it in world coordinates.
 
-Clover is an open source [ROS](https://www.ros.org)-based framework, providing user-friendly tools to control [PX4](https://px4.io)-powered drones. Clover is available as a ROS package, but is shipped mainly as a preconfigured image for Raspberry Pi. Once you've installed Raspberry Pi on your drone and flashed the image to its microSD card, taking the drone up in the air is a matter of minutes.
+Built as a capstone research project in programming-language design at Chapman University: the question was whether a domain-specific visual language could make autonomous UAV mission planning accessible to non-programmers without hiding the real flight stack underneath.
 
-COEX Clover Drone is an educational programmable drone kit, suited perfectly for running clover software. The kit is shipped unassembled and includes Pixracer-compatible autopilot running PX4 firmware, Raspberry Pi 4 as a companion computer, a camera for computer vision navigation as well as additional sensors and peripheral devices. Batteries included.
+**Stack:** ROS Noetic · PX4 SITL · Gazebo 11 · OpenCV · tf2 · Python · C++ · JavaScript / Google Blockly
 
-The main documentation is available at [https://clover.coex.tech](https://clover.coex.tech/). Official website: [coex.tech/clover](https://coex.tech/clover).
+---
 
-[__Support us on Kickstarter!__](https://www.kickstarter.com/projects/copterexpress/cloverdrone)
+## Demo
 
-## Video compilation
+![Autonomous search, detection, and tracking in Gazebo](docs/assets/drone_demo.gif)
 
-[![Clover Drone Kit autonomy compilation](http://img.youtube.com/vi/u3omgsYC4Fk/hqdefault.jpg)](https://youtu.be/u3omgsYC4Fk)
+The drone arms, takes off, flies a serpentine survey pattern, detects the red target, tracks it while it moves, then returns to its launch point and lands. Console output on the right shows the navigation state transitions in real time.
 
-Clover drone is used on a wide range of educational events, including [Copter Hack](https://www.youtube.com/watch?v=xgXheg3TTs4), WorldSkills Drone Operation competition, [Autonomous Vehicles Track of NTI Olympics 2016–2020](https://www.youtube.com/watch?v=E1_ehvJRKxg), Quadro Hack 2019 (National University of Science and Technology MISiS), Russian Robot Olympiad (autonomous flights), and others.
+*Full-resolution version: [`docs/assets/drone_demo.mp4`](docs/assets/drone_demo.mp4)*
 
-## Raspberry Pi image
+---
 
-Preconfigured image for Raspberry Pi with installed and configured software, ready to fly, is available [in the Releases section](https://github.com/CopterExpress/clover/releases).
+## What this fork adds
 
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/CopterExpress/clover/build-image.yaml?branch=master)
-![GitHub all releases](https://img.shields.io/github/downloads/CopterExpress/clover/total)
+| Area | Contribution |
+|---|---|
+| **Visual DSL** | New `find_target` block encapsulating an entire search-and-detect mission; extended block library and Python code generator (`blocks.js` +516 lines, `python.js` +396 lines) |
+| **Computer vision** | HSV target detection with dual-range red masking, moments-based centroiding, and pinhole back-projection from image coordinates to 3D world points |
+| **Flight logic** | Serpentine (boustrophedon) area search, tf2-based target localization in the `map` frame, position-hold tracking, and return-to-launch |
+| **Simulation** | Custom Gazebo world with a **moving** target — the detection problem is tracking, not a static lookup |
 
-Image features:
+---
 
-* Raspbian Buster
-* [ROS Noetic](http://wiki.ros.org/noetic)
-* Configured networking
-* OpenCV
-* [`mavros`](http://wiki.ros.org/mavros)
-* Periphery drivers for ROS ([GPIO](https://clover.coex.tech/en/gpio.html), [LED strip](https://clover.coex.tech/en/leds.html), etc)
-* `aruco_pose` package for marker-assisted navigation
-* `clover` package for autonomous drone control
+## Architecture
 
-API description for autonomous flights is available [on GitBook](https://clover.coex.tech/en/simple_offboard.html).
+```
+Blockly workspace  ──▶  python.js generator  ──▶  mission.py
+   (browser UI)          (code generation)         (ROS node)
+                                                       │
+                              ┌────────────────────────┴────────────────────────┐
+                              ▼                                                 ▼
+                    OpenCV vision pipeline                          Clover simple_offboard
+                 camera_info → undistort →                       navigate / set_position /
+                 HSV mask → centroid →                              land / release
+                 back-project → tf2 → map frame                            │
+                                                                           ▼
+                                                                    PX4 SITL ──▶ Gazebo
+```
 
-For manual package installation and running see [`clover` package documentation](clover/README.md).
+The web UI talks to ROS over `rosbridge_websocket` (port 9090). Generated Python runs as an ordinary ROS node, so anything the DSL produces can be read, edited, and run by hand — the abstraction is transparent rather than sealed.
 
-## Support
+### The `find_target` block
 
-[![Telegram Support Chat](https://img.shields.io/endpoint?label=Support%20Chat&url=https%3A%2F%2Ftelegram-badge-4mbpu8e0fit4.runkit.sh%2F%3Furl%3Dhttps%3A%2F%2Ft.me%2FCOEXHelpDesk)](https://t.me/COEXHelpdesk)
+One block on the canvas — *Find Target · Search Area Center (X, Y) · Grid Size* — generates the complete mission:
 
-## License
+```python
+# search grid: serpentine sweep, 0.33 m lateral spacing, 1 m row spacing
+x_range = np.round(np.linspace(x - size/2, x + size/2, int(size/.33) + 1), 2)
+y_range = np.round(np.linspace(y - size/2, y + size/2, int(size/1) + 1), 2)
+search_pattern = ((x, y) for i, y in enumerate(y_range)
+    for x in (x_range if i % 2 == 0 else reversed(x_range)))
+```
 
-While the Clover platform source code is available under the MIT License, note, that the [documentation](docs/) is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License.
+plus `move_to_next_search_point()` with `StopIteration` handling for the not-found case (return to launch and land), the image callback, and the subscriber wiring. The generator also injects the imports, service proxies, and camera-model setup the mission needs, tracked as generator dependencies so they emit exactly once.
+
+### Vision pipeline
+
+Red wraps the hue circle, so detection uses two ranges unioned together:
+
+```python
+mask1 = cv2.inRange(img_hsv, (0, 150, 150),   (15, 255, 255))
+mask2 = cv2.inRange(img_hsv, (160, 150, 150), (180, 255, 255))
+mask  = cv2.bitwise_or(mask1, mask2)
+```
+
+The centroid comes from image moments. Converting it to a world position uses the camera intrinsics from `camera_info`, `cv2.undistortPoints` to remove lens distortion, and a pinhole projection scaled by the rangefinder's terrain altitude — then `tf2` transforms that point from the camera frame into `map`, where it becomes a position setpoint. Decoupling detection from control this way means the drone commands a *world* position rather than chasing pixels.
+
+---
+
+## The flight scripts
+
+Three versions in [`clover/examples/`](clover/examples/), kept deliberately to show how the mission logic developed:
+
+| File | Behavior |
+|---|---|
+| `red_circle_og.py` | Manual baseline — detect and follow, triggered by keypress. No autonomy. |
+| `red_circle_v2.py` | Generated by the Blockly toolchain. Autonomous takeoff, area search, detection, 10 s of tracking, then land on target. Split-callback design: the vision callback publishes to `~red_circle`, a target callback transforms and commands. |
+| `red_circle_v3.py` | Hand-extended from generated output. Tracks for 20 s, releases the offboard setpoint stream, returns to the launch position, and lands there. |
+
+The v2 → v3 step is the interesting one: the generated code is the starting point, not the ceiling. Generated structure (search grid, waypoint iterator, not-found handling) survives verbatim into v3 while the mission-completion behavior is rewritten by hand.
+
+---
+
+## Simulation environment
+
+`clover_simulation/models/red_circle/red_circle.sdf` converts the stock static marker into a Gazebo `<actor>` with a looping 35-second trajectory — it holds position for 5 s, translates 10 m over 15 s, and returns. This is what makes the demo a tracking problem: by the time the drone has localized the target, the target has moved.
+
+`clover_red_circle.world` hosts it with grid and origin visuals disabled for a clean camera view, and `simulator.launch` loads that world instead of the stock ArUco scene.
+
+---
+
+## Running it
+
+Requires a working Clover/ROS Noetic environment with PX4 SITL built ([upstream setup guide](https://clover.coex.tech/en/simulation_native.html)).
+
+```bash
+# 1. simulation + Blockly UI (this fork enables the blocks node by default)
+roslaunch clover_simulation simulator.launch
+
+# 2. fly a mission
+rosrun clover red_circle_v3.py
+```
+
+The Blockly page is served from `clover_blocks/www/` — on a stock desktop install it needs the static web root generated (`rosrun roswww_static update`) and a web server pointed at `~/.ros/www`; the official Clover Raspberry Pi image does both already.
+
+---
+
+## Status and known limitations
+
+- The `take_photo` and `hover` blocks have UI definitions but no Python generators yet — they are placeholders, not working blocks.
+- Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
+- Tested in Gazebo SITL only. No hardware flights yet — porting to a physical Clover airframe is the intended next step.
+
+---
+
+## Credits
+
+Upstream [Clover](https://github.com/CopterExpress/clover) is developed by [COEX](https://coex.tech) and licensed under the MIT License. The original upstream README is preserved at [`README.upstream.md`](README.upstream.md). Everything described above is my own work on top of that framework.
