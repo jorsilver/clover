@@ -229,12 +229,28 @@ sits on the target's track; holding that position detects the target in roughly
 - Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
 - The tests cover **code generation**, not flight behaviour — they prove the generator emits what it should, not that the drone flies correctly.
 - Four upstream scaffolding blocks (`key_pressed`, `on_armed`, `on_take_off`, `on_landing`) have definitions but no generators. They are dead in upstream too and are not reachable from the toolbox.
-- **The EKF position estimate drifts, and the drone flies to where it *believes* the setpoint is.** Commanded to `(0.5, 5.0)`, `get_telemetry` reported `(0.50, 5.00)` steadily while Gazebo ground truth was `(1.71, 5.35)` — a 1.3 m error that grew from 0.86 m over 45 s, with `WARN [ecl/EKF] vision data stopped` in the log. At 2 m altitude the camera footprint is only a few metres, so a large drift episode puts the target out of frame entirely and the search silently fails while telemetry looks perfect. When a mission behaves oddly, compare the estimate against truth before suspecting the detector:
+- **Position accuracy depends on the ArUco marker field.** The world originally
+  contained only the floor and the target, leaving the EKF to dead-reckon on
+  optical flow: commanded to `(0.5, 5.0)`, `get_telemetry` read `(0.50, 5.00)`
+  steadily while Gazebo ground truth was `(1.71, 5.35)` — a 1.3 m error that
+  *grew* over time, with `WARN [ecl/EKF] vision data stopped` in the log. Since
+  the drone flies to where it *believes* the setpoint is, a large drift puts the
+  target outside the camera footprint and the search fails silently while
+  telemetry looks perfect. Adding `model://aruco_cmit_txt` to the world and
+  enabling `aruco_map`/`aruco_vpe` cuts the error to a **stable 0.16 m mean,
+  0.20 m max**. When a mission behaves oddly, check the estimate against truth
+  before suspecting the detector:
 
   ```bash
-  rosservice call /get_telemetry "frame_id: 'map'"        # what the drone believes
-  rosservice call /gazebo/get_model_state "{model_name: 'clover'}"   # where it actually is
+  rosservice call /get_telemetry "frame_id: 'map'"
+  rosservice call /gazebo/get_model_state "{model_name: 'clover'}"
   ```
+
+- **`simulator.launch` does not forward every argument.** `blocks:=true` and
+  `aruco:=true` on the command line are silently ignored — neither is declared
+  as a top-level arg that reaches `clover.launch`. Both are set via defaults
+  inside `clover.launch` in this fork instead.
+
 - Tested in Gazebo SITL only (verified on an ARM64 Ubuntu 20.04 VM: camera ~20 Hz, real-time factor 1.0, full mission flown end to end). No hardware flights yet — porting to a physical Clover airframe is the intended next step.
 
 ---

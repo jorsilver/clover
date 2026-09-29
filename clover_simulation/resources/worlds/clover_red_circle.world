@@ -10,6 +10,13 @@
       <pose>0 0 -0.01 0 0 0</pose>
     </include>
 
+    <!-- ArUco marker field: gives the EKF an absolute position reference.
+         Without it the estimate dead-reckons on optical flow and drifts by
+         over a metre, so the drone searches the wrong place. -->
+    <include>
+      <uri>model://aruco_cmit_txt</uri>
+    </include>
+
     <include>
       <uri>model://red_circle</uri>
       <pose>10 0 0 0 0 0</pose>

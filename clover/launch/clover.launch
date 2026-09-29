@@ -7,7 +7,7 @@
     <arg name="rosbridge" default="true"/>
     <arg name="main_camera" default="true"/>
     <arg name="optical_flow" default="true"/>
-    <arg name="aruco" default="false"/>
+    <arg name="aruco" default="true"/>
     <arg name="rangefinder_vl53l1x" default="true"/>
     <arg name="led" default="true"/>
     <arg name="blocks" default="true"/>
@@ -37,6 +37,9 @@
     <include file="$(find clover)/launch/aruco.launch" if="$(eval aruco or force_init)">
         <arg name="force_init" value="$(arg force_init)"/>
         <arg name="disable" value="$(eval not aruco)"/>
+        <arg name="aruco_map" value="$(arg aruco)"/>
+        <arg name="aruco_vpe" value="$(arg aruco)"/>
+        <arg name="map" value="cmit.txt"/>
     </include>
 
     <!-- optical flow -->
