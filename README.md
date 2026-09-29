@@ -143,11 +143,28 @@ Requires a working Clover/ROS Noetic environment with PX4 SITL built ([upstream 
 
 ```bash
 # 1. simulation + Blockly UI (this fork enables the blocks node by default)
+./tools/run_sim.sh          # wrapper - see the two gotchas below
+#   or, if your environment already handles them:
 roslaunch clover_simulation simulator.launch
 
 # 2. fly a mission
 rosrun clover red_circle_v3.py
 ```
+
+**Two gotchas when running headless or over SSH**, both of which produce
+misleading symptoms. `tools/run_sim.sh` handles them:
+
+- **PX4 SITL needs an open stdin.** It runs an interactive shell (`pxh>`), so
+  under `nohup`, `setsid` or `< /dev/null` it gets EOF, prints `Exiting NOW.`
+  and quits. roslaunch then reports a *segfault* in `sitl_0` — that segfault is
+  teardown wreckage, not the cause. Fix: `sleep infinity | roslaunch ...`.
+- **Gazebo needs an X display even with `gui:=false`**, to create a GL context
+  for camera sensors. Without one you get
+  `Unable to create CameraSensor. Rendering is disabled` — and because the
+  camera feeds optical flow, the EKF never gets a stable position estimate, so
+  **the drone arms but will not climb** and the mode drops from `OFFBOARD` to
+  `ALTCTL`. A flight-control symptom with a rendering cause. Fix: export
+  `DISPLAY` and `XAUTHORITY`.
 
 The Blockly page is served from `clover_blocks/www/` — on a stock desktop install it needs the static web root generated (`rosrun roswww_static update`) and a web server pointed at `~/.ros/www`; the official Clover Raspberry Pi image does both already.
 
@@ -175,7 +192,7 @@ shows up as a reviewable diff in the next commit.
 - Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
 - The tests cover **code generation**, not flight behaviour — they prove the generator emits what it should, not that the drone flies correctly.
 - Four upstream scaffolding blocks (`key_pressed`, `on_armed`, `on_take_off`, `on_landing`) have definitions but no generators. They are dead in upstream too and are not reachable from the toolbox.
-- Tested in Gazebo SITL only. No hardware flights yet — porting to a physical Clover airframe is the intended next step.
+- Tested in Gazebo SITL only (verified running on an ARM64 Ubuntu 20.04 VM: camera at ~20 Hz, takeoff to 2 m holding `OFFBOARD`). No hardware flights yet — porting to a physical Clover airframe is the intended next step.
 
 ---
 
