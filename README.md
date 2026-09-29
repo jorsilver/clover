@@ -184,6 +184,43 @@ shows up as a reviewable diff in the next commit.
 
 ---
 
+## Verified end to end
+
+The whole chain — blocks in the browser, generated Python, actual flight in
+Gazebo — was run and confirmed on an ARM64 Ubuntu 20.04 VM.
+
+**The mission, as blocks:**
+
+![The search-and-rescue mission in the Blockly editor](media/blockly_sar_mission.png)
+
+**The Python it generates** (the editor's Python tab):
+
+![Generated Python in the editor](media/blockly_generated_python.png)
+
+**What the drone's downward camera sees, and the mask the detector builds from
+it** — green circle and crosshair mark the centroid that gets back-projected
+into the `map` frame:
+
+![Red circle detection and HSV mask](media/cv_detection.png)
+
+**The flight:** takeoff → serpentine search → detect → track → land → disarm,
+in roughly 35 s of wall time, with Gazebo holding a real-time factor of 1.0.
+
+A useful property fell out of the test harness: the Python it generates offline
+is **byte-identical** to what the browser editor produces, so
+`cd tests && npm test` is a faithful check of the real thing.
+
+### Tuning the search to the target
+
+The target is not static — it runs along **y = 5.0**, sweeping x from about
+**−5 to +6.25**. The stock `find_target` parameters (centre `0,0`, grid size 6)
+cover only x,y ∈ [−3, 3] and can therefore *never* see it.
+`tests/missions/sar_demo.xml` uses centre `(0.5, 5)` with grid size 3, which
+sits on the target's track; holding that position detects the target in roughly
+**44% of frames** as it sweeps past.
+
+---
+
 ## Status and known limitations
 
 - `find_target` is retained for compatibility but is effectively a whole program: it ends in `rospy.spin()`, so no block can follow it. New missions should use the composable blocks instead.
@@ -192,7 +229,8 @@ shows up as a reviewable diff in the next commit.
 - Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
 - The tests cover **code generation**, not flight behaviour — they prove the generator emits what it should, not that the drone flies correctly.
 - Four upstream scaffolding blocks (`key_pressed`, `on_armed`, `on_take_off`, `on_landing`) have definitions but no generators. They are dead in upstream too and are not reachable from the toolbox.
-- Tested in Gazebo SITL only (verified running on an ARM64 Ubuntu 20.04 VM: camera at ~20 Hz, takeoff to 2 m holding `OFFBOARD`). No hardware flights yet — porting to a physical Clover airframe is the intended next step.
+- **Run the simulation headless (`gui:=false`) for any mission that uses the camera.** With `gui:=true` the Gazebo client appears to contend for the GL context and the downward camera sensor stops rendering the target: measured at the same position and altitude, detection went from **44% of frames headless to 0% with the GUI running**. The GUI is fine for watching the drone, but not while relying on computer vision.
+- Tested in Gazebo SITL only (verified on an ARM64 Ubuntu 20.04 VM: camera ~20 Hz, real-time factor 1.0, full mission flown end to end). No hardware flights yet — porting to a physical Clover airframe is the intended next step.
 
 ---
 
