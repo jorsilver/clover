@@ -106,12 +106,38 @@ const GET_CENTER_OF_MASS = () => `\ndef get_center_of_mass(mask):
     M = cv2.moments(mask)
     return (M['m10'] // M['m00'], M['m01'] // M['m00']) if M['m00'] != 0 else None\n`;
 
+// Shared code fragments.
+//
+// The callback-driven path (find_target) and the composable path (search_area,
+// detect_target) emit the same perception logic. These builders are the single
+// source for it: retuning the target colour or the grid spacing now means
+// editing one place, not two.
+
+const RED_HSV_LOW = "(0, 150, 150), (15, 255, 255)";
+const RED_HSV_HIGH = "(160, 150, 150), (180, 255, 255)";
+
+// Dual-range red mask. Red wraps around the hue circle, so it needs two ranges.
+// `ind` is the Python indentation to emit at.
+function redMaskLines(ind) {
+	return `${ind}img_hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)\n`
+		+ `${ind}mask1 = cv2.inRange(img_hsv, ${RED_HSV_LOW})\n`
+		+ `${ind}mask2 = cv2.inRange(img_hsv, ${RED_HSV_HIGH})\n`
+		+ `${ind}mask = cv2.bitwise_or(mask1, mask2)`;
+}
+
+// Serpentine (boustrophedon) search grid. Emitted at module level by
+// find_target with literal coordinates, and inside a function body by
+// search_area with parameter names - hence the configurable names and indents.
+function searchGridLines(x, y, size, patternVar, ind, contInd) {
+	return `${ind}x_range = np.round(np.linspace(${x} - ${size} / 2, ${x} + ${size} / 2, int(${size}/.33) + 1),2)\n`
+		+ `${ind}y_range = np.round(np.linspace(${y} - ${size} / 2, ${y} + ${size} / 2, int(${size}/1) + 1),2)\n`
+		+ `${ind}${patternVar} = ((x, y) for i, y in enumerate(y_range)\n`
+		+ `${contInd}for x in (x_range if i % 2 == 0 else reversed(x_range)))`;
+}
+
 const IMAGE_CALLBACK = () => `\npoint_pub = rospy.Publisher('~red_circle', PointStamped, queue_size=1)`
 	+ `\nfound = False\n@long_callback\ndef image_callback(msg):
-    img_hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)
-    mask1 = cv2.inRange(img_hsv, (0, 150, 150), (15, 255, 255))
-    mask2 = cv2.inRange(img_hsv, (160, 150, 150), (180, 255, 255))
-    mask = cv2.bitwise_or(mask1, mask2)
+${redMaskLines('    ')}
 
     global found
     xy = get_center_of_mass(mask)
@@ -607,11 +633,7 @@ function cv () {
 }
 
 function search_grid (x, y, size) {
-	let code = `\nx_range = np.round(np.linspace(${x} - ${size} / 2, ${x} + ${size} / 2, int(${size}/.33) + 1),2)`;
-	code += `\ny_range = np.round(np.linspace(${y} - ${size} / 2, ${y} + ${size} / 2, int(${size}/1) + 1),2)`;
-	code += `\nsearch_pattern = ((x, y) for i, y in enumerate(y_range)
-    for x in (x_range if i % 2 == 0 else reversed(x_range)))`;
-	return code;
+	return '\n' + searchGridLines(x, y, size, 'search_pattern', '', '    ');
 }
 
 const NEXT_SEARCH_POINT = () => `\norigin = get_telemetry()\ndef move_to_next_search_point():
@@ -691,16 +713,11 @@ const TF_LISTENER = () => `\ntf_buffer = tf2_ros.Buffer()\ntf_listener = tf2_ros
 
 const DETECT_TARGET = () => `\ndef detect_target():
     msg = rospy.wait_for_message('main_camera/image_raw_throttled', Image)
-    hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)
-    mask = cv2.bitwise_or(cv2.inRange(hsv, (0, 150, 150), (15, 255, 255)),
-                          cv2.inRange(hsv, (160, 150, 150), (180, 255, 255)))
+${redMaskLines('    ')}
     return msg, get_center_of_mass(mask)\n`;
 
 const SEARCH_AREA = `\ndef search_area(cx, cy, size):
-    x_range = np.round(np.linspace(cx - size / 2, cx + size / 2, int(size/.33) + 1),2)
-    y_range = np.round(np.linspace(cy - size / 2, cy + size / 2, int(size/1) + 1),2)
-    pattern = ((x, y) for i, y in enumerate(y_range)
-        for x in (x_range if i % 2 == 0 else reversed(x_range)))
+${searchGridLines('cx', 'cy', 'size', 'pattern', '    ', '        ')}
     for tx, ty in pattern:
         if rospy.is_shutdown():
             return False

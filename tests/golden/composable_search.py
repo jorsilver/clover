@@ -42,9 +42,10 @@ tf_listener = tf2_ros.TransformListener(tf_buffer)
 
 def detect_target():
     msg = rospy.wait_for_message('main_camera/image_raw_throttled', Image)
-    hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)
-    mask = cv2.bitwise_or(cv2.inRange(hsv, (0, 150, 150), (15, 255, 255)),
-                          cv2.inRange(hsv, (160, 150, 150), (180, 255, 255)))
+    img_hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)
+    mask1 = cv2.inRange(img_hsv, (0, 150, 150), (15, 255, 255))
+    mask2 = cv2.inRange(img_hsv, (160, 150, 150), (180, 255, 255))
+    mask = cv2.bitwise_or(mask1, mask2)
     return msg, get_center_of_mass(mask)
 
 def land_wait():
