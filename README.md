@@ -169,7 +169,8 @@ shows up as a reviewable diff in the next commit.
 
 ## Status and known limitations
 
-- `find_target` is retained for compatibility but is effectively a whole program: it ends in `rospy.spin()`, so no block can follow it. New missions should use the composable blocks instead. Re-expressing `find_target` in terms of them is the next refactor.
+- `find_target` is retained for compatibility but is effectively a whole program: it ends in `rospy.spin()`, so no block can follow it. New missions should use the composable blocks instead.
+- The two paths now **share their perception code** (`RED_HSV_LOW`/`HIGH`, `redMaskLines`, `searchGridLines`), so the detector is tuned in one place. They still emit *different programs* though: `find_target` emits callbacks plus `spin()`, the composable blocks emit a linear script. Making `find_target` literally call `search_area` would change its runtime model from callback-driven to polling — a behaviour change, not a refactor, so it is deliberately not done. The golden test enforces that `find_target`'s output stays byte-for-byte fixed.
 - `search_area` and `track_target` poll frames with `wait_for_message` rather than subscribing, which is what makes them composable. Detection rate is therefore bounded by the round trip, and is lower than the callback-driven path.
 - Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
 - The tests cover **code generation**, not flight behaviour — they prove the generator emits what it should, not that the drone flies correctly.
