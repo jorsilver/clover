@@ -635,3 +635,36 @@ Blockly.Python.find_target = function(block) {
 	code += `\nrospy.spin()`;
 	return code;
 }
+
+/* Camera Category */
+
+const TAKE_PHOTO = `\ndef take_photo():
+    _bridge = CvBridge()
+    _img = _bridge.imgmsg_to_cv2(rospy.wait_for_message('main_camera/image_raw', Image), 'bgr8')
+    _name = 'photo_%s.jpg' % datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    cv2.imwrite(_name, _img)
+    rospy.loginfo('Saved photo: %s' % _name)
+    return _name\n`;
+
+Blockly.Python.take_photo = function(block) {
+	initNode();
+	Blockly.Python.definitions_['import_cv2'] = 'import cv2';
+	Blockly.Python.definitions_['import_image'] = 'from sensor_msgs.msg import Image, CameraInfo';
+	Blockly.Python.definitions_['import_cv_bridge'] = 'from cv_bridge import CvBridge';
+	Blockly.Python.definitions_['import_datetime'] = 'from datetime import datetime';
+	Blockly.Python.definitions_['take_photo'] = TAKE_PHOTO;
+	return 'take_photo()\n';
+}
+
+const HOVER = `\ndef hover(alt):
+    _telem = get_telemetry(frame_id='map')
+    navigate_wait(x=_telem.x, y=_telem.y, z=alt, frame_id='map')\n`;
+
+Blockly.Python.hover = function(block) {
+	rosDefinitions.navigateWait = true;
+	importMath();
+	simpleOffboard();
+	Blockly.Python.definitions_['hover'] = HOVER;
+	let alt = Blockly.Python.valueToCode(block, 'ALTITUDE', Blockly.Python.ORDER_NONE);
+	return `hover(${alt})\n`;
+}
