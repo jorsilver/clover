@@ -149,7 +149,9 @@ var rosDefinitions = {};
 //Add ROS Service Proxies, and ROS Func Defs
 function generateROSDefinitions() {
 	// order for ROS definitions is significant, so generate all ROS definitions as one
-	var code = rosDefinitions.cv ?
+	// cvHelpers = composable CV path (helpers, no spin-based callbacks)
+	const needsCv = rosDefinitions.cv || rosDefinitions.cvHelpers;
+	var code = needsCv ?
 		`rospy.init_node('cv', disable_signals=True)\nbridge = CvBridge()\n\n` 
 		: `rospy.init_node('flight')\n\n`;
 
@@ -159,7 +161,7 @@ function generateROSDefinitions() {
 	if (rosDefinitions.offboard) {
         rosServiceProxy('get_telemetry', 'srv.GetTelemetry');
 		rosServiceProxy('navigate', 'srv.Navigate');
-		rosDefinitions.cv && rosServiceProxy('set_position', 'srv.SetPosition')
+		needsCv && rosServiceProxy('set_position', 'srv.SetPosition')
         rosDefinitions.navigateGlobal && rosServiceProxy('navigate_global', 'srv.NavigateGlobal');
         rosDefinitions.setYaw && rosServiceProxy('set_yaw', 'srv.SetYaw');
         rosDefinitions.setVelocity && rosServiceProxy('set_velocity', 'srv.SetVelocity');
@@ -177,6 +179,14 @@ function generateROSDefinitions() {
 		code += GET_CENTER_OF_MASS();
 		code += IMAGE_CALLBACK();
 		code += TARGET_CALLBACK();
+	} else if (rosDefinitions.cvHelpers) {
+		// same perception helpers, but no subscribers and no rospy.spin(),
+		// so the emitted program stays a linear script that blocks can follow
+		code += WAIT_ARRIVAL_PARAMS();
+		code += IMG_XY_TO_POINT();
+		code += GET_CENTER_OF_MASS();
+		code += TF_LISTENER();
+		code += DETECT_TARGET();
 	}
 
     rosDefinitions.landWait && (code += LAND_WAIT());
@@ -667,4 +677,110 @@ Blockly.Python.hover = function(block) {
 	Blockly.Python.definitions_['hover'] = HOVER;
 	let alt = Blockly.Python.valueToCode(block, 'ALTITUDE', Blockly.Python.ORDER_NONE);
 	return `hover(${alt})\n`;
+}
+
+
+/* Composable mission generators.
+ *
+ * These share find_target's perception helpers (img_xy_to_point,
+ * get_center_of_mass) but drive them synchronously instead of through
+ * subscribers + rospy.spin(). The emitted program stays a linear script,
+ * so blocks can follow a search and missions can be composed. */
+
+const TF_LISTENER = () => `\ntf_buffer = tf2_ros.Buffer()\ntf_listener = tf2_ros.TransformListener(tf_buffer)\n`;
+
+const DETECT_TARGET = () => `\ndef detect_target():
+    msg = rospy.wait_for_message('main_camera/image_raw_throttled', Image)
+    hsv = cv2.cvtColor(bridge.imgmsg_to_cv2(msg, 'bgr8'), cv2.COLOR_BGR2HSV)
+    mask = cv2.bitwise_or(cv2.inRange(hsv, (0, 150, 150), (15, 255, 255)),
+                          cv2.inRange(hsv, (160, 150, 150), (180, 255, 255)))
+    return msg, get_center_of_mass(mask)\n`;
+
+const SEARCH_AREA = `\ndef search_area(cx, cy, size):
+    x_range = np.round(np.linspace(cx - size / 2, cx + size / 2, int(size/.33) + 1),2)
+    y_range = np.round(np.linspace(cy - size / 2, cy + size / 2, int(size/1) + 1),2)
+    pattern = ((x, y) for i, y in enumerate(y_range)
+        for x in (x_range if i % 2 == 0 else reversed(x_range)))
+    for tx, ty in pattern:
+        if rospy.is_shutdown():
+            return False
+        set_position(x=tx, y=ty, z=float('nan'), yaw=float('nan'), frame_id='map')
+        wait_arrival(tolerance=0.66, time=-1)
+        if detect_target()[1] is not None:
+            return True
+    return False\n`;
+
+const TRACK_TARGET = `\ndef track_target(seconds):
+    start = rospy.get_time()
+    while rospy.get_time() - start < seconds and not rospy.is_shutdown():
+        msg, xy = detect_target()
+        if xy is None:
+            continue
+        point = img_xy_to_point(xy, get_telemetry('terrain').z)
+        setpoint = tf_buffer.transform(PointStamped(msg.header, point), 'map', timeout=rospy.Duration(0.2))
+        set_position(x=setpoint.point.x, y=setpoint.point.y, z=float('nan'), yaw=float('nan'), frame_id=setpoint.header.frame_id)\n`;
+
+// Uses navigate_wait rather than wait_arrival: the CV path defines a
+// parameterized wait_arrival(tolerance, time) and the plain flight path defines
+// a no-arg one, so depending on it here would let the two collide.
+const RETURN_TO_LAUNCH = `\nlaunch_origin = get_telemetry(frame_id='map')\ndef return_to_launch(z):
+    navigate_wait(x=launch_origin.x, y=launch_origin.y, z=z, speed=1, frame_id='map')\n`;
+
+const PATROL_ROUTE = `\ndef patrol_route(waypoints, repeat):
+    for _ in range(int(repeat)):
+        for wp in waypoints:
+            if rospy.is_shutdown():
+                return
+            navigate_wait(x=wp[0], y=wp[1], z=wp[2], frame_id='map')\n`;
+
+// shared setup for the composable perception blocks
+function cvHelpers() {
+	cv();
+	Blockly.Python.definitions_['import_numpy'] = 'import numpy as np';
+	Blockly.Python.definitions_['import_tf2_ros'] = 'import tf2_ros';
+	Blockly.Python.definitions_['import_tf2_geometry_msgs'] = 'import tf2_geometry_msgs';
+	rosDefinitions.cvHelpers = true;
+	simpleOffboard();
+}
+
+Blockly.Python.search_area = function(block) {
+	cvHelpers();
+	Blockly.Python.definitions_['search_area'] = SEARCH_AREA;
+	let x = Blockly.Python.valueToCode(block, 'X', Blockly.Python.ORDER_NONE);
+	let y = Blockly.Python.valueToCode(block, 'Y', Blockly.Python.ORDER_NONE);
+	let size = Blockly.Python.valueToCode(block, 'SIZE', Blockly.Python.ORDER_NONE);
+	return [`search_area(${x}, ${y}, ${size})`, Blockly.Python.ORDER_FUNCTION_CALL];
+}
+
+Blockly.Python.track_target = function(block) {
+	cvHelpers();
+	Blockly.Python.definitions_['track_target'] = TRACK_TARGET;
+	let seconds = Blockly.Python.valueToCode(block, 'SECONDS', Blockly.Python.ORDER_NONE);
+	return `track_target(${seconds})\n`;
+}
+
+Blockly.Python.return_to_launch = function(block) {
+	rosDefinitions.navigateWait = true;
+	importMath();
+	simpleOffboard();
+	Blockly.Python.definitions_['return_to_launch'] = RETURN_TO_LAUNCH;
+	let z = Blockly.Python.valueToCode(block, 'Z', Blockly.Python.ORDER_NONE);
+	return `return_to_launch(${z})\n`;
+}
+
+Blockly.Python.waypoint = function(block) {
+	let x = Blockly.Python.valueToCode(block, 'X', Blockly.Python.ORDER_NONE);
+	let y = Blockly.Python.valueToCode(block, 'Y', Blockly.Python.ORDER_NONE);
+	let z = Blockly.Python.valueToCode(block, 'Z', Blockly.Python.ORDER_NONE);
+	return [`(${x}, ${y}, ${z})`, Blockly.Python.ORDER_ATOMIC];
+}
+
+Blockly.Python.patrol_route = function(block) {
+	rosDefinitions.navigateWait = true;
+	importMath();
+	simpleOffboard();
+	Blockly.Python.definitions_['patrol_route'] = PATROL_ROUTE;
+	let waypoints = Blockly.Python.valueToCode(block, 'WAYPOINTS', Blockly.Python.ORDER_NONE) || '[]';
+	let repeat = Blockly.Python.valueToCode(block, 'REPEAT', Blockly.Python.ORDER_NONE) || '1';
+	return `patrol_route(${waypoints}, ${repeat})\n`;
 }

@@ -693,3 +693,101 @@ Blockly.Blocks['find_target'] = {
 // 		this.setHelpUrl(DOCS_URL + '#' + this.type);
 // 	}
 // };
+
+/* Composable mission blocks.
+ *
+ * find_target is a whole program: it ends in rospy.spin(), so nothing can
+ * follow it and missions cannot be combined. These blocks decompose the same
+ * capability into pieces that snap together — search_area reports whether it
+ * found anything, so it composes with the standard `if` block. */
+
+Blockly.Blocks['search_area'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("search area centered");
+		this.appendValueInput("X")
+			.setCheck("Number")
+			.appendField("X");
+		this.appendValueInput("Y")
+			.setCheck("Number")
+			.appendField("Y");
+		this.appendValueInput("SIZE")
+			.setCheck("Number")
+			.appendField("size");
+		this.setInputsInline(true);
+		this.setOutput(true, "Boolean");
+		this.setColour(230);
+		this.setTooltip("Flies a serpentine search grid over the given area. Reports true as soon as a target is seen, false if the whole grid is covered without a detection.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['track_target'] = {
+	init: function () {
+		this.appendValueInput("SECONDS")
+			.setCheck("Number")
+			.appendField("track target for");
+		this.appendDummyInput()
+			.appendField("seconds");
+		this.setInputsInline(true);
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour(230);
+		this.setTooltip("Keeps the drone centered over the last seen target for the given duration.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['return_to_launch'] = {
+	init: function () {
+		this.appendValueInput("Z")
+			.setCheck("Number")
+			.appendField("return to launch at altitude");
+		this.setInputsInline(true);
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour("#870b99");
+		this.setTooltip("Flies back to the position recorded when the program started.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['waypoint'] = {
+	init: function () {
+		this.appendDummyInput()
+			.appendField("waypoint");
+		this.appendValueInput("X")
+			.setCheck("Number")
+			.appendField("X");
+		this.appendValueInput("Y")
+			.setCheck("Number")
+			.appendField("Y");
+		this.appendValueInput("Z")
+			.setCheck("Number")
+			.appendField("Z");
+		this.setInputsInline(true);
+		this.setOutput(true, "Array");
+		this.setColour("#870b99");
+		this.setTooltip("A single map-frame waypoint, for use in a patrol route.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
+
+Blockly.Blocks['patrol_route'] = {
+	init: function () {
+		this.appendValueInput("WAYPOINTS")
+			.setCheck("Array")
+			.appendField("patrol route");
+		this.appendValueInput("REPEAT")
+			.setCheck("Number")
+			.appendField("repeat");
+		this.appendDummyInput()
+			.appendField("times");
+		this.setInputsInline(true);
+		this.setPreviousStatement(true, null);
+		this.setNextStatement(true, null);
+		this.setColour("#870b99");
+		this.setTooltip("Flies a list of waypoints in order, repeated the given number of times.");
+		this.setHelpUrl(DOCS_URL + '#' + this.type);
+	}
+};
