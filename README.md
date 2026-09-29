@@ -26,6 +26,8 @@ The drone arms, takes off, flies a serpentine survey pattern, detects the red ta
 | **Computer vision** | HSV target detection with dual-range red masking, moments-based centroiding, and pinhole back-projection from image coordinates to 3D world points |
 | **Flight logic** | Serpentine (boustrophedon) area search, tf2-based target localization in the `map` frame, position-hold tracking, and return-to-launch |
 | **Simulation** | Custom Gazebo world with a **moving** target — the detection problem is tracking, not a static lookup |
+| **Composable mission blocks** | `search_area`, `track_target`, `return_to_launch`, `waypoint`, `patrol_route` — primitives that snap together, so a mission is written with ordinary `if`/`else` rather than one monolithic block |
+| **Test harness** | Headless golden-file tests for the code generator (`tests/`) — runs the real generators in Node with no browser, ROS or drone |
 
 ---
 
@@ -75,6 +77,41 @@ The centroid comes from image moments. Converting it to a world position uses th
 
 ---
 
+### Composable mission blocks
+
+`find_target` packs an entire mission into one block. That makes for a compact
+demo but a poor language: because the generated code ends in `rospy.spin()`,
+nothing can follow it, and two missions can never be combined.
+
+The composable blocks express the same capability as pieces that snap together.
+`search_area` is a **value** block returning a boolean, so it works with the
+standard `if`/`else` block rather than needing bespoke control flow:
+
+```python
+# generated from: take off -> if search area (0, 0, 6) -> track / else return
+navigate_wait(z=2, frame_id='body', auto_arm=True)
+if search_area(0, 0, 6):
+    track_target(5)
+    land_wait()
+else:
+    return_to_launch(0.5)
+    land_wait()
+```
+
+| Block | Kind | Emits |
+|---|---|---|
+| `search area centered X Y size S` | value (Boolean) | serpentine sweep; `True` on first detection, `False` if the grid is exhausted |
+| `track target for N seconds` | statement | holds position over the target using tf2 back-projection |
+| `return to launch at altitude Z` | statement | flies back to the position recorded at program start |
+| `waypoint X Y Z` | value (Array) | a single map-frame point |
+| `patrol route [...] repeat N times` | statement | flies a waypoint list, repeated |
+
+The trade-off is deliberate: these drive the perception helpers synchronously
+with `wait_for_message` instead of subscribing, which is exactly what removes
+the need for `spin()` and makes them composable.
+
+---
+
 ## The flight scripts
 
 Three versions in [`clover/examples/`](clover/examples/), kept deliberately to show how the mission logic developed:
@@ -111,12 +148,29 @@ rosrun clover red_circle_v3.py
 
 The Blockly page is served from `clover_blocks/www/` — on a stock desktop install it needs the static web root generated (`rosrun roswww_static update`) and a web server pointed at `~/.ros/www`; the official Clover Raspberry Pi image does both already.
 
+### Tests
+
+The Python code generator is tested headlessly — no browser, ROS or drone
+required, because the generators are pure functions from a block to a string:
+
+```bash
+cd tests && npm install && npm test
+```
+
+Each test renders a mission (`tests/missions/*.xml`) through the real
+`generateCode()` entry point and diffs the result against a checked-in golden
+file. `npm run test:update` rewrites the goldens, so any change to a generator
+shows up as a reviewable diff in the next commit.
+
 ---
 
 ## Status and known limitations
 
-- The `take_photo` and `hover` blocks have UI definitions but no Python generators yet — they are placeholders, not working blocks.
+- `find_target` is retained for compatibility but is effectively a whole program: it ends in `rospy.spin()`, so no block can follow it. New missions should use the composable blocks instead. Re-expressing `find_target` in terms of them is the next refactor.
+- `search_area` and `track_target` poll frames with `wait_for_message` rather than subscribing, which is what makes them composable. Detection rate is therefore bounded by the round trip, and is lower than the callback-driven path.
 - Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
+- The tests cover **code generation**, not flight behaviour — they prove the generator emits what it should, not that the drone flies correctly.
+- Four upstream scaffolding blocks (`key_pressed`, `on_armed`, `on_take_off`, `on_landing`) have definitions but no generators. They are dead in upstream too and are not reachable from the toolbox.
 - Tested in Gazebo SITL only. No hardware flights yet — porting to a physical Clover airframe is the intended next step.
 
 ---
