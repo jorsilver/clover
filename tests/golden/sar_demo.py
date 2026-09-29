@@ -83,8 +83,8 @@ def navigate_wait(x=0, y=0, z=0, speed=0.5, frame_id='body', auto_arm=False):
             return
         rospy.sleep(0.2)
 
-x_range = np.round(np.linspace(0 - 6 / 2, 0 + 6 / 2, int(6/.33) + 1),2)
-y_range = np.round(np.linspace(0 - 6 / 2, 0 + 6 / 2, int(6/1) + 1),2)
+x_range = np.round(np.linspace(0.5 - 3 / 2, 0.5 + 3 / 2, int(3/.33) + 1),2)
+y_range = np.round(np.linspace(5 - 3 / 2, 5 + 3 / 2, int(3/1) + 1),2)
 search_pattern = ((x, y) for i, y in enumerate(y_range)
     for x in (x_range if i % 2 == 0 else reversed(x_range)))
 origin = get_telemetry()
@@ -100,9 +100,9 @@ def move_to_next_search_point():
         rospy.signal_shutdown("Circle not found.")
 
 
-_b('takeoff1')
+_b('sar_takeoff')
 navigate_wait(z=2, frame_id='body', auto_arm=True)
-_b('find1')
+_b('sar_find')
 
 pattern_start = next(search_pattern)
 navigate(x=pattern_start[0], y=pattern_start[1], z=float('nan'), speed=1)

@@ -1,0 +1,13 @@
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <block type="take_off" id="sar_takeoff" x="20" y="20">
+    <value name="ALT"><shadow type="math_number" id="sar_alt"><field name="NUM">2</field></shadow></value>
+    <field name="WAIT">TRUE</field>
+    <next>
+      <block type="find_target" id="sar_find">
+        <value name="X"><shadow type="math_number" id="sar_x"><field name="NUM">0.5</field></shadow></value>
+        <value name="Y"><shadow type="math_number" id="sar_y"><field name="NUM">5</field></shadow></value>
+        <value name="SIZE"><shadow type="math_number" id="sar_size"><field name="NUM">3</field></shadow></value>
+      </block>
+    </next>
+  </block>
+</xml>

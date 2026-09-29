@@ -141,10 +141,11 @@ ${redMaskLines('    ')}
 
     global found
     xy = get_center_of_mass(mask)
-    if not found and xy is None: 
-        move_to_next_search_point()
+    if xy is None:
+        if not found:
+            move_to_next_search_point()
         return
-    
+
     found = True
     altitude = get_telemetry('terrain').z
     point_pub.publish(PointStamped(msg.header, img_xy_to_point(xy, altitude)))\n`;
