@@ -1,0 +1,13 @@
+<xml xmlns="https://developers.google.com/blockly/xml">
+  <block type="take_off" id="takeoff1" x="20" y="20">
+    <value name="ALT"><shadow type="math_number" id="alt1"><field name="NUM">2</field></shadow></value>
+    <field name="WAIT">TRUE</field>
+    <next>
+      <block type="find_target" id="find1">
+        <value name="X"><shadow type="math_number" id="x1"><field name="NUM">0</field></shadow></value>
+        <value name="Y"><shadow type="math_number" id="y1"><field name="NUM">0</field></shadow></value>
+        <value name="SIZE"><shadow type="math_number" id="size1"><field name="NUM">6</field></shadow></value>
+      </block>
+    </next>
+  </block>
+</xml>

@@ -1,0 +1,13 @@
+{
+  "name": "clover-blocks-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless tests for the clover_blocks Blockly -> Python generator",
+  "scripts": {
+    "test": "node run.js",
+    "test:update": "node run.js --update"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "^0.9.0"
+  }
+}
