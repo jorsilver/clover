@@ -84,6 +84,9 @@ demo but a poor language: because the generated code ends in `rospy.spin()`,
 nothing can follow it, and two missions can never be combined.
 
 The composable blocks express the same capability as pieces that snap together.
+
+![The Mission block category in the Clover Blocks editor](media/blockly_mission_blocks.png)
+
 `search_area` is a **value** block returning a boolean, so it works with the
 standard `if`/`else` block rather than needing bespoke control flow:
 
