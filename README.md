@@ -113,6 +113,17 @@ The trade-off is deliberate: these drive the perception helpers synchronously
 with `wait_for_message` instead of subscribing, which is exactly what removes
 the need for `spin()` and makes them composable.
 
+**This is not just tidier code generation — it fixes a real defect.**
+`find_target`'s generated program ends with `rospy.signal_shutdown()`, and
+Blockly programs execute *inside* the `clover_blocks` node process. So running a
+`find_target` mission **kills the Blockly backend**: the editor then reports
+*"Error loading programs list"* and the whole simulation has to be restarted
+before another program can run. The composable blocks emit no `signal_shutdown`
+at all, so missions are re-runnable.
+
+All five were flown in Gazebo (see *Verified end to end*): four consecutive
+missions, zero restarts, with the node still alive at the end.
+
 ---
 
 ## The flight scripts
@@ -210,6 +221,24 @@ A useful property fell out of the test harness: the Python it generates offline
 is **byte-identical** to what the browser editor produces, so
 `cd tests && npm test` is a faithful check of the real thing.
 
+### The composable blocks, flown
+
+Every composable block was run on the drone, not just generated:
+
+| Mission | Blocks exercised | Result |
+|---|---|---|
+| `composable_sar` run 1 | `search_area` → `track_target` → `land` | found target, tracked, landed, disarmed (16 s) |
+| `composable_sar` run 2 | same, **no restart in between** | completed again — node survived |
+| `patrol` | `waypoint`, `patrol_route` | flew (2,0) → (2,2) → (0,2), twice, landed |
+| search-miss variant | `search_area` false → `return_to_launch` | searched (0,−5), found nothing, returned to the program's start position, landed |
+
+Four consecutive missions, **zero simulation restarts**, `clover_blocks` alive
+throughout. The equivalent `find_target` mission kills the node on its first run.
+
+One concern that turned out to be unfounded: `search_area` polls frames with
+`wait_for_message` rather than subscribing, and I expected that lower duty cycle
+to miss a moving target. It detected on both runs.
+
 ### Tuning the search to the target
 
 The target is not static — it runs along **y = 5.0**, sweeping x from about
@@ -223,7 +252,7 @@ sits on the target's track; holding that position detects the target in roughly
 
 ## Status and known limitations
 
-- `find_target` is retained for compatibility but is effectively a whole program: it ends in `rospy.spin()`, so no block can follow it. New missions should use the composable blocks instead.
+- `find_target` is retained for compatibility but is effectively a whole program: it ends in `rospy.spin()`, so no block can follow it, and its `rospy.signal_shutdown()` calls kill the `clover_blocks` node that hosts it — one mission per simulation restart. New missions should use the composable blocks, which have neither problem.
 - The two paths now **share their perception code** (`RED_HSV_LOW`/`HIGH`, `redMaskLines`, `searchGridLines`), so the detector is tuned in one place. They still emit *different programs* though: `find_target` emits callbacks plus `spin()`, the composable blocks emit a linear script. Making `find_target` literally call `search_area` would change its runtime model from callback-driven to polling — a behaviour change, not a refactor, so it is deliberately not done. The golden test enforces that `find_target`'s output stays byte-for-byte fixed.
 - `search_area` and `track_target` poll frames with `wait_for_message` rather than subscribing, which is what makes them composable. Detection rate is therefore bounded by the round trip, and is lower than the callback-driven path.
 - Search-grid parameters are tuned for the demo scene; coverage guarantees scale with camera FOV and altitude and have not been formally verified.
