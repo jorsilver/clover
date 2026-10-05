@@ -8,3 +8,4 @@ clover_blocks/programs/*.*
 !clover_blocks/programs/examples/*
 /.vscode/
 !tests/package-lock.json
+CLAUDE.md
