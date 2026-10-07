@@ -9,3 +9,4 @@ clover_blocks/programs/*.*
 /.vscode/
 !tests/package-lock.json
 CLAUDE.md
+tools/vm_up.sh
