@@ -208,13 +208,6 @@ That last one is the deployment path to real hardware: cutting a GitHub release
 builds the image and attaches the zip to it, so flashing it gives you a drone
 running this mission language.
 
-Getting CI working surfaced three latent bugs that had never been visible,
-because GitHub disables Actions on forks and this started life as one:
-a retired `upload-artifact@v3` that failed every job during *setup*; `rosdep`
-skipping ROS Noetic because it went end-of-life in May 2025; and a dead
-`python-pymavlink` dependency key in `clover/package.xml` left over from
-Python 2.
-
 ---
 
 ## Verified end to end
