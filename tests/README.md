@@ -12,6 +12,12 @@ npm install
 npm test
 ```
 
+## In CI
+
+These run on every push via `.github/workflows/tests.yml` — Node 20,
+`npm ci`, `npm test`, about 25 seconds. They are the fast check; the `Build`
+workflow does the slow one (`catkin_make` in a ROS Noetic container).
+
 ## Layout
 
 | Path | What it is |

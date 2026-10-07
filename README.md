@@ -6,6 +6,9 @@ Built as a capstone research project in programming-language design at Chapman U
 
 **Stack:** ROS Noetic · PX4 SITL · Gazebo 11 · OpenCV · tf2 · Python · C++ · JavaScript / Google Blockly
 
+[![Blockly generator tests](https://github.com/jorsilver/sar-drone-dsl/actions/workflows/tests.yml/badge.svg)](https://github.com/jorsilver/sar-drone-dsl/actions/workflows/tests.yml)
+[![Build](https://github.com/jorsilver/sar-drone-dsl/actions/workflows/build.yml/badge.svg)](https://github.com/jorsilver/sar-drone-dsl/actions/workflows/build.yml)
+
 ---
 
 ## Demo
@@ -192,6 +195,25 @@ Each test renders a mission (`tests/missions/*.xml`) through the real
 `generateCode()` entry point and diffs the result against a checked-in golden
 file. `npm run test:update` rewrites the goldens, so any change to a generator
 shows up as a reviewable diff in the next commit.
+
+### Continuous integration
+
+| Workflow | Runs on | What it checks |
+|---|---|---|
+| **Blockly generator tests** | every push | The golden-file suite above — ~25 s, no ROS or drone needed |
+| **Build** | every push | `catkin_make`, `catkin_make run_tests` and Debian packaging in a ROS Noetic container |
+| **RPi image** | manual, or on a release | Builds a flashable Raspberry Pi image **containing this fork** |
+
+That last one is the deployment path to real hardware: cutting a GitHub release
+builds the image and attaches the zip to it, so flashing it gives you a drone
+running this mission language.
+
+Getting CI working surfaced three latent bugs that had never been visible,
+because GitHub disables Actions on forks and this started life as one:
+a retired `upload-artifact@v3` that failed every job during *setup*; `rosdep`
+skipping ROS Noetic because it went end-of-life in May 2025; and a dead
+`python-pymavlink` dependency key in `clover/package.xml` left over from
+Python 2.
 
 ---
 
