@@ -44,7 +44,7 @@
   <depend>dynamic_reconfigure</depend>
   <depend>image_proc</depend>
   <depend>image_geometry</depend>
-  <exec_depend>python-pymavlink</exec_depend>
+  <exec_depend>python3-pymavlink-pip</exec_depend>
   <test_depend>ros_pytest</test_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
